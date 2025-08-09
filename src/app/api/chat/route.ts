@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import pdfParse from 'pdf-parse';
-import { Document } from 'docx';
+import mammoth from 'mammoth';
 
 // Initialize Google AI
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_STUDIO_API_KEY!);
@@ -40,9 +40,8 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 // Function to extract text from DOCX
 async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
   try {
-    const doc = new Document(buffer);
-    const text = await doc.getText();
-    return text;
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
   } catch (error) {
     console.error('Error parsing DOCX:', error);
     throw new Error('Failed to extract text from DOCX');
