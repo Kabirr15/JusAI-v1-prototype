@@ -34,13 +34,16 @@ Your role is to:
 4. Highlight potential risks or areas of concern
 5. Provide actionable advice while making it clear that you are not providing legal counsel
 6. Always maintain a professional, helpful tone
+7. Engage in multi-turn conversations naturally, referencing previous context
 
 Important guidelines:
 - Provide the most direct and concise answer possible, focusing only on the key facts. Do not use conversational filler.
 - If the user starts the conversation with a simple greeting like 'Hi' or 'Hello', respond with a friendly greeting like 'Hello! How can I assist you today?'
-- If a legal question is asked without a document attached, respond with: 'Please upload a legal document (PDF, DOCX, etc.) for me to assist you with that request.'
+- You can provide general legal guidance even without a document, but always clarify when document analysis would be beneficial
 - Use clear, non-technical language when possible
 - If you encounter unclear or ambiguous language in documents, point it out
+- Maintain conversation context and refer back to previous messages when relevant
+- If a user asks follow-up questions, use the conversation history to provide contextual responses
 
 DISCLAIMER: This is for informational purposes only and does not constitute legal advice.`;
 
@@ -93,7 +96,7 @@ async function extractTextFromFile(file: File): Promise<string | null> {
 }
 
 // Function to generate AI response
-async function generateAIResponse(question: string, documentText: string | null): Promise<string> {
+async function generateAIResponse(question: string, documentText: string | null, chatHistory: Array<{role: string, content: string}> = []): Promise<string> {
   try {
     if (!genAI) {
       throw new Error('Google AI client not initialized');
@@ -103,11 +106,26 @@ async function generateAIResponse(question: string, documentText: string | null)
 
     let prompt = INSTRUCTIONS + "\n\n";
     
+    // Add document context if available
     if (documentText) {
       prompt += `CONTEXT (Document Content):\n${documentText}\n\n`;
-      prompt += `QUESTION: ${question}\n\nPlease provide a comprehensive analysis and response based on the document content above.`;
+    }
+    
+    // Add conversation history for context
+    if (chatHistory && chatHistory.length > 0) {
+      prompt += `CONVERSATION HISTORY:\n`;
+      chatHistory.forEach((msg) => {
+        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
+      });
+      prompt += `\n`;
+    }
+    
+    prompt += `CURRENT QUESTION: ${question}\n\n`;
+    
+    if (documentText) {
+      prompt += `Please provide a comprehensive analysis and response based on the document content above. If this is a follow-up question, consider the conversation history for context.`;
     } else {
-      prompt += `QUESTION: ${question}\n\nPlease provide general legal guidance for this question. If this requires document analysis, please ask the user to upload a relevant document.`;
+      prompt += `Please provide general legal guidance for this question. If this requires document analysis, please suggest that the user upload a relevant document. If this is a follow-up question, use the conversation history to provide contextual responses.`;
     }
 
     const result = await model.generateContent(prompt);
@@ -149,6 +167,18 @@ export async function POST(request: NextRequest) {
     
     const question = formData.get('question') as string;
     const file = formData.get('document') as File | null;
+    const chatHistoryStr = formData.get('chatHistory') as string;
+    
+    // Parse chat history
+    let chatHistory: Array<{role: string, content: string}> = [];
+    try {
+      if (chatHistoryStr) {
+        chatHistory = JSON.parse(chatHistoryStr);
+      }
+    } catch (error) {
+      console.warn('Failed to parse chat history, using empty array:', error);
+      chatHistory = [];
+    }
 
     // Validate required fields
     if (!question || !question.trim()) {
@@ -160,6 +190,7 @@ export async function POST(request: NextRequest) {
 
     // Log the received data
     console.log('📝 Received question:', question);
+    console.log('💬 Chat history length:', chatHistory.length);
     
     if (file) {
       console.log('📄 Uploaded document:', {
@@ -215,7 +246,7 @@ export async function POST(request: NextRequest) {
     // Generate AI response
     let aiResponse: string;
     try {
-      aiResponse = await generateAIResponse(question, documentText);
+      aiResponse = await generateAIResponse(question, documentText, chatHistory);
       console.log('🤖 AI response generated successfully');
     } catch (error) {
       console.error('❌ Error generating AI response:', error);

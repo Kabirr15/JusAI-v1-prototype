@@ -91,6 +91,13 @@ export default function JusAI() {
       const formData = new FormData()
       formData.append('question', question)
       
+      // Add chat history for context
+      const chatHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      formData.append('chatHistory', JSON.stringify(chatHistory))
+      
       if (file) {
         formData.append('document', file)
       }
@@ -151,15 +158,16 @@ export default function JusAI() {
     const currentInput = input
     const currentFile = selectedFile
     
-    // Clear input and file
+    // Clear only the input, keep the file for multi-turn conversations
     setInput('')
-    setSelectedFile(null)
+    // Don't clear selectedFile - it should persist for the conversation
+    // Only clear the file input reference for UI purposes
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
 
     try {
-      // Get AI response
+      // Get AI response with chat history
       const aiResponseText = await askAI(currentInput, currentFile)
       
       const aiResponse: Message = {
@@ -356,7 +364,7 @@ export default function JusAI() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Ask me about contracts, legal procedures, or any legal question..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500 bg-white"
                     disabled={isLoading}
                   />
                 </div>
