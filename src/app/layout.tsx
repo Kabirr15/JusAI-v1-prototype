@@ -1,8 +1,13 @@
 import type { Metadata } from "next"
-import { Inter } from 'next/font/google'
+import { Inter, Allura } from 'next/font/google'
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
+const allura = Allura({ 
+  weight: '400',
+  subsets: ["latin"],
+  variable: '--font-allura'
+})
 
 export const metadata: Metadata = {
   title: "JusAI - Legal Guidance, Simplified",
@@ -17,13 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Allura&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className={inter.className}>{children}</body>
+      <body className={`${inter.className} ${allura.variable}`}>{children}</body>
     </html>
   )
 }

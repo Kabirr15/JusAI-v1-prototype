@@ -1,0 +1,229 @@
+{
+  "tech_stack": ["TypeScript", "JavaScript", "Next.js", "React", "Express.js", "Node.js", "Tailwind CSS", "Google Gemini AI", "Supabase", "PDF parsing"],
+  "features": [
+    {
+      "name": "Chat API",
+      "description": "AI-powered legal assistant that analyzes uploaded documents (PDF, DOC, DOCX, TXT, CSV) and answers questions using Google Gemini AI",
+      "files": ["src/app/api/chat/route.ts", "backend/server.js"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "JusAI Chat API",
+          "version": "1.0.0",
+          "description": "API for document analysis and AI-powered legal assistance"
+        },
+        "paths": {
+          "/api/chat": {
+            "post": {
+              "summary": "Process document and answer questions using AI",
+              "requestBody": {
+                "content": {
+                  "multipart/form-data": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "description": "Question about the document"
+                        },
+                        "document": {
+                          "type": "string",
+                          "format": "binary",
+                          "description": "Document file (PDF, DOC, DOCX, TXT, CSV)"
+                        }
+                      },
+                      "required": ["question"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "AI response generated successfully",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "response": {"type": "string"},
+                          "message": {"type": "string"},
+                          "timestamp": {"type": "string"},
+                          "question": {"type": "string"},
+                          "document": {
+                            "type": "object",
+                            "properties": {
+                              "filename": {"type": "string"},
+                              "mimetype": {"type": "string"},
+                              "size": {"type": "number"}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "400": {
+                  "description": "Bad request - invalid file type or missing question"
+                },
+                "500": {
+                  "description": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Main Chat Interface",
+      "description": "React-based chat interface allowing users to upload legal documents and ask questions",
+      "files": ["src/app/page.tsx"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "JusAI Frontend",
+          "version": "1.0.0",
+          "description": "Frontend chat interface for legal document analysis"
+        },
+        "components": {
+          "schemas": {
+            "Message": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "content": {"type": "string"},
+                "role": {"type": "string", "enum": ["user", "assistant"]},
+                "timestamp": {"type": "string", "format": "date-time"},
+                "fileName": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "File Upload Handler",
+      "description": "Handles file selection and validation for legal documents (PDF, DOC, DOCX, TXT, CSV) with 10MB size limit",
+      "files": ["src/app/page.tsx"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "File Upload Handler",
+          "version": "1.0.0"
+        },
+        "components": {
+          "schemas": {
+            "FileValidation": {
+              "type": "object",
+              "properties": {
+                "allowedTypes": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "example": ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/csv"]
+                },
+                "maxSize": {"type": "number", "example": 10485760}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Backend Health Check",
+      "description": "Health monitoring endpoints for server status and Supabase connection testing",
+      "files": ["backend/server.js"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Health Check API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/": {
+            "get": {
+              "summary": "Get server status",
+              "responses": {
+                "200": {
+                  "description": "Server status",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "message": {"type": "string"},
+                          "supabase": {"type": "string", "enum": ["connected", "not configured"]}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/health": {
+            "get": {
+              "summary": "Health check endpoint",
+              "responses": {
+                "200": {
+                  "description": "Health status",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "status": {"type": "string"},
+                          "timestamp": {"type": "string"},
+                          "supabase": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/supabase/test": {
+            "get": {
+              "summary": "Test Supabase connection",
+              "responses": {
+                "200": {
+                  "description": "Connection successful"
+                },
+                "500": {
+                  "description": "Connection failed"
+                },
+                "503": {
+                  "description": "Supabase not configured"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Navigation Header",
+      "description": "Navigation header with Home, Documents, and Account menu items",
+      "files": ["src/app/page.tsx"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Navigation Component",
+          "version": "1.0.0"
+        },
+        "components": {
+          "schemas": {
+            "NavigationItem": {
+              "type": "object",
+              "properties": {
+                "label": {"type": "string"},
+                "icon": {"type": "string"},
+                "action": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

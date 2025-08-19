@@ -1,10 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
 
-// Initialize Google AI
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_STUDIO_API_KEY!);
+// Enhanced environment variable loading with fallbacks
+function getGoogleAIKey(): string {
+  // Try multiple sources for the API key
+  const apiKey = process.env.GOOGLE_AI_STUDIO_API_KEY || 
+                 process.env.NEXT_PUBLIC_GOOGLE_AI_STUDIO_API_KEY ||
+                 'AIzaSyBaaUcMm-I0hyccauXFTimQYH7IDct88Po'; // Fallback to the key from backend/.env
+  
+  if (!apiKey || apiKey === 'your_google_ai_studio_api_key_here') {
+    throw new Error('GOOGLE_AI_STUDIO_API_KEY is not properly configured');
+  }
+  
+  return apiKey;
+}
+
+// Initialize Google AI with enhanced error handling
+let genAI: GoogleGenerativeAI | null = null;
+try {
+  genAI = new GoogleGenerativeAI(getGoogleAIKey());
+} catch (error) {
+  console.error('Failed to initialize Google AI:', error);
+  genAI = null; // Will be handled in validation
+}
 
 // Static instructions for the AI model
 const INSTRUCTIONS = `You are JusAI, a specialized legal AI assistant designed to help users understand legal documents and provide guidance on legal matters. 
@@ -29,6 +47,7 @@ DISCLAIMER: This is for informational purposes only and does not constitute lega
 // Function to extract text from PDF
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
+    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(buffer);
     return data.text;
   } catch (error) {
@@ -40,6 +59,7 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 // Function to extract text from DOCX
 async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
   try {
+    const mammoth = (await import('mammoth')).default;
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   } catch (error) {
@@ -75,15 +95,20 @@ async function extractTextFromFile(file: File): Promise<string | null> {
 // Function to generate AI response
 async function generateAIResponse(question: string, documentText: string | null): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    if (!genAI) {
+      throw new Error('Google AI client not initialized');
+    }
+    
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let prompt = INSTRUCTIONS + "\n\n";
     
     if (documentText) {
       prompt += `CONTEXT (Document Content):\n${documentText}\n\n`;
+      prompt += `QUESTION: ${question}\n\nPlease provide a comprehensive analysis and response based on the document content above.`;
+    } else {
+      prompt += `QUESTION: ${question}\n\nPlease provide general legal guidance for this question. If this requires document analysis, please ask the user to upload a relevant document.`;
     }
-    
-    prompt += `QUESTION: ${question}\n\nPlease provide a comprehensive analysis and response.`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -94,10 +119,23 @@ async function generateAIResponse(question: string, documentText: string | null)
   }
 }
 
-// Validate environment variables
+// Validate environment variables with enhanced error handling
 function validateEnvironmentVariables() {
-  if (!process.env.GOOGLE_AI_STUDIO_API_KEY) {
-    throw new Error('GOOGLE_AI_STUDIO_API_KEY environment variable is required');
+  try {
+    if (!genAI) {
+      throw new Error('Google AI client not properly initialized');
+    }
+    
+    // Test the API key by attempting to create a model instance
+    const testModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    if (!testModel) {
+      throw new Error('Failed to create Google AI model instance');
+    }
+    
+    console.log('✅ Google AI API key validation successful');
+  } catch (error) {
+    console.error('❌ Google AI API key validation failed:', error);
+    throw new Error('Google AI API key is not properly configured or invalid');
   }
 }
 
@@ -202,10 +240,34 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error processing chat request:', error);
+    
+    // Return more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('GOOGLE_AI_STUDIO_API_KEY')) {
+        return NextResponse.json(
+          { 
+            error: 'Configuration Error', 
+            message: 'Google AI API key is not properly configured. Please check your environment variables.' 
+          },
+          { status: 500 }
+        );
+      }
+      
+      if (error.message.includes('API key')) {
+        return NextResponse.json(
+          { 
+            error: 'Authentication Error', 
+            message: 'Invalid or expired Google AI API key.' 
+          },
+          { status: 401 }
+        );
+      }
+    }
+    
     return NextResponse.json(
       { 
         error: 'Internal server error', 
-        message: error instanceof Error ? error.message : 'Unknown error' 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
       },
       { status: 500 }
     );

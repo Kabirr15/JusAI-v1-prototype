@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Home, FileText, User, Send, Paperclip, Sparkles, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
+import { HydrationSafe } from '@/components/ui/hydration-safe';
+
 interface Message {
   id: string
   content: string
@@ -20,7 +22,7 @@ export default function JusAI() {
       id: '1',
       content: 'Hello. How can I assist you with your legal needs today?',
       role: 'assistant',
-      timestamp: new Date()
+      timestamp: new Date('2024-01-01T00:00:00.000Z') // Fixed timestamp to prevent hydration mismatch
     }
   ])
   const [input, setInput] = useState('')
@@ -28,6 +30,7 @@ export default function JusAI() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
 
   useEffect(() => {
     // Trigger animation after component mounts
@@ -69,6 +72,21 @@ export default function JusAI() {
     try {
       setIsLoading(true)
       
+      // First, check if the API is healthy
+      try {
+        const healthResponse = await fetch('/api/health');
+        if (!healthResponse.ok) {
+          throw new Error('API health check failed');
+        }
+        const healthData = await healthResponse.json();
+        if (healthData.status !== 'healthy') {
+          throw new Error(healthData.message || 'API configuration error');
+        }
+      } catch (healthError) {
+        console.error('Health check failed:', healthError);
+        throw new Error('Server configuration error. Please check that the Google AI API key is properly set up.');
+      }
+      
       // Create FormData object
       const formData = new FormData()
       formData.append('question', question)
@@ -84,7 +102,9 @@ export default function JusAI() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json()
@@ -94,6 +114,20 @@ export default function JusAI() {
 
     } catch (error) {
       console.error('Error calling AI API:', error)
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('Server configuration error') || 
+            error.message.includes('API configuration error')) {
+          throw new Error('Server configuration error. Please check that the Google AI API key is properly set up.');
+        } else if (error.message.includes('Authentication error') || 
+                   error.message.includes('Invalid or expired')) {
+          throw new Error('Authentication error. The Google AI API key may be invalid or expired.');
+        } else if (error.message.includes('API key')) {
+          throw new Error('Google AI API key configuration error. Please contact support.');
+        }
+      }
+      
       throw new Error('Failed to get AI response. Please try again.')
     } finally {
       setIsLoading(false)
@@ -138,6 +172,7 @@ export default function JusAI() {
       setMessages(prev => [...prev, aiResponse])
       
     } catch (error) {
+      console.error('Error in handleSend:', error)
       // Handle error
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -170,20 +205,22 @@ export default function JusAI() {
               JusAI
             </h1>
           </div>
-          <nav className="flex items-center space-x-6">
-            <button className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
-              <Home size={18} />
-              <span className="font-medium">Home</span>
-            </button>
-            <button className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
-              <FileText size={18} />
-              <span className="font-medium">Documents</span>
-            </button>
-            <button className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
-              <User size={18} />
-              <span className="font-medium">Account</span>
-            </button>
-          </nav>
+          <HydrationSafe>
+            <nav className="flex items-center space-x-6">
+              <button type="button" className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
+                <Home size={18} />
+                <span className="font-medium">Home</span>
+              </button>
+              <button type="button" className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
+                <FileText size={18} />
+                <span className="font-medium">Documents</span>
+              </button>
+              <button type="button" className="flex items-center space-x-2 text-white/90 hover:text-white transition-colors">
+                <User size={18} />
+                <span className="font-medium">Account</span>
+              </button>
+            </nav>
+          </HydrationSafe>
         </div>
       </header>
 
@@ -192,7 +229,7 @@ export default function JusAI() {
         {/* Page Headline */}
         <div className="text-center py-12">
           <h2 className="text-4xl font-bold text-blue-900">
-            Legal Guidance, <span className="text-5xl" style={{ fontFamily: 'Allura, cursive' }}>Simplified.</span>
+            Legal Guidance, <span className="text-5xl font-allura">Simplified.</span>
           </h2>
           <div className="w-20 h-0.5 bg-blue-900 mx-auto mt-4"></div>
         </div>
@@ -280,52 +317,58 @@ export default function JusAI() {
           <div className="max-w-4xl mx-auto px-6 py-4">
             {/* File attachment display */}
             {selectedFile && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <FileText size={16} className="text-blue-600" />
-                  <span className="text-sm text-blue-800">{selectedFile.name}</span>
+              <HydrationSafe>
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <FileText size={16} className="text-blue-600" />
+                    <span className="text-sm text-blue-800">{selectedFile.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeFile}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
-                <button
-                  onClick={removeFile}
-                  className="text-blue-600 hover:text-blue-800"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              </HydrationSafe>
             )}
             
-            <div className="flex items-center space-x-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleFileSelect}
-                accept=".pdf,.doc,.docx,.txt,.csv"
-                className="hidden"
-              />
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
-              >
-                <Paperclip size={20} />
-              </button>
-              <div className="flex-1">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ask me about contracts, legal procedures, or any legal question..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white placeholder-gray-500"
-                  disabled={isLoading}
+            <HydrationSafe>
+              <div className="flex items-center space-x-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  accept=".pdf,.doc,.docx,.txt,.csv"
+                  className="hidden"
                 />
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                >
+                  <Paperclip size={20} />
+                </button>
+                <div className="flex-1">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Ask me about contracts, legal procedures, or any legal question..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
+                    disabled={isLoading}
+                  />
+                </div>
+                <Button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send size={18} />
+                </Button>
               </div>
-              <Button
-                onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Send size={18} />
-              </Button>
-            </div>
+            </HydrationSafe>
           </div>
         </div>
       </main>

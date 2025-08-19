@@ -1,0 +1,16 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "backendAuthType": "public",
+  "executionArgs": {
+    "projectName": "JusAI-v1-prototype",
+    "projectPath": "D:\\projects\\Justice\\JusAI-v1-prototype",
+    "testIds": [],
+    "additionalInstruction": "Focus on testing the runtime errors visible in the console: hydration errors with buttons, API call failures (HTTP 500), and navigation button issues. Test the complete chat interface flow including file upload and AI responses.",
+    "envs": {
+      "API_KEY": ""
+    }
+  }
+}
