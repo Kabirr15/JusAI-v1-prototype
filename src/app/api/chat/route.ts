@@ -95,14 +95,17 @@ async function extractTextFromFile(file: File): Promise<string | null> {
   }
 }
 
-// Function to generate AI response
-async function generateAIResponse(question: string, documentText: string | null, chatHistory: Array<{role: string, content: string}> = []): Promise<string> {
+// Function to generate AI response with retry logic
+async function generateAIResponse(question: string, documentText: string | null, chatHistory: Array<{role: string, content: string}> = [], retryCount = 0): Promise<string> {
+  const maxRetries = 3;
+  const baseDelay = 2000; // 2 second base delay for API calls
+  
   try {
     if (!genAI) {
       throw new Error('Google AI client not initialized');
     }
     
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     let prompt = INSTRUCTIONS + "\n\n";
     
@@ -133,6 +136,33 @@ async function generateAIResponse(question: string, documentText: string | null,
     return response.text();
   } catch (error) {
     console.error('Error generating AI response:', error);
+    
+    // Handle rate limiting with exponential backoff retry
+    if (error instanceof Error) {
+      const errorMsg = error.message.toLowerCase();
+      
+      if ((errorMsg.includes('quota') || errorMsg.includes('rate limit')) && retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+        console.log(`Rate limit hit in API, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return generateAIResponse(question, documentText, chatHistory, retryCount + 1);
+      }
+      
+      if (errorMsg.includes('api key') || errorMsg.includes('authentication')) {
+        throw new Error('Authentication error. The Google AI API key may be invalid or expired.');
+      } else if (errorMsg.includes('quota') || errorMsg.includes('rate limit')) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      } else if (errorMsg.includes('network') || errorMsg.includes('timeout')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      } else if (errorMsg.includes('model') || errorMsg.includes('not found')) {
+        throw new Error('AI model not available. Please try again later.');
+      }
+      
+      // Return the original error message if it's already user-friendly
+      throw new Error(error.message);
+    }
+    
     throw new Error('Failed to generate AI response');
   }
 }
@@ -145,7 +175,7 @@ function validateEnvironmentVariables() {
     }
     
     // Test the API key by attempting to create a model instance
-    const testModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const testModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     if (!testModel) {
       throw new Error('Failed to create Google AI model instance');
     }

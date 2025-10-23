@@ -68,7 +68,10 @@ export default function JusAI() {
     }
   }
 
-  const askAI = async (question: string, file: File | null) => {
+  const askAI = async (question: string, file: File | null, retryCount = 0) => {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second base delay
+    
     try {
       setIsLoading(true)
       
@@ -76,7 +79,7 @@ export default function JusAI() {
       try {
         const healthResponse = await fetch('/api/health');
         if (!healthResponse.ok) {
-          throw new Error('API health check failed');
+          throw new Error(`API health check failed with status: ${healthResponse.status}`);
         }
         const healthData = await healthResponse.json();
         if (healthData.status !== 'healthy') {
@@ -109,12 +112,22 @@ export default function JusAI() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || `HTTP error! status: ${response.status}`;
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (parseError) {
+          console.warn('Failed to parse error response:', parseError);
+        }
         throw new Error(errorMessage);
       }
 
       const data = await response.json()
+      
+      // Validate response structure
+      if (!data.response) {
+        throw new Error('Invalid response format from AI service');
+      }
       
       // Return the AI response
       return data.response
@@ -122,20 +135,41 @@ export default function JusAI() {
     } catch (error) {
       console.error('Error calling AI API:', error)
       
-      // Provide more specific error messages
+      // Handle rate limiting with exponential backoff retry
       if (error instanceof Error) {
-        if (error.message.includes('Server configuration error') || 
-            error.message.includes('API configuration error')) {
-          throw new Error('Server configuration error. Please check that the Google AI API key is properly set up.');
-        } else if (error.message.includes('Authentication error') || 
-                   error.message.includes('Invalid or expired')) {
-          throw new Error('Authentication error. The Google AI API key may be invalid or expired.');
-        } else if (error.message.includes('API key')) {
-          throw new Error('Google AI API key configuration error. Please contact support.');
+        const errorMsg = error.message.toLowerCase();
+        
+        if ((errorMsg.includes('rate limit') || errorMsg.includes('quota')) && retryCount < maxRetries) {
+          const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+          console.log(`Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return askAI(question, file, retryCount + 1);
         }
+        
+        if (errorMsg.includes('server configuration error') || 
+            errorMsg.includes('api configuration error') ||
+            errorMsg.includes('google ai api key')) {
+          throw new Error('Server configuration error. Please check that the Google AI API key is properly set up.');
+        } else if (errorMsg.includes('authentication error') || 
+                   errorMsg.includes('invalid or expired') ||
+                   errorMsg.includes('unauthorized')) {
+          throw new Error('Authentication error. The Google AI API key may be invalid or expired.');
+        } else if (errorMsg.includes('api key')) {
+          throw new Error('Google AI API key configuration error. Please contact support.');
+        } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+          throw new Error('Network error. Please check your internet connection and try again.');
+        } else if (errorMsg.includes('timeout')) {
+          throw new Error('Request timeout. The AI service is taking too long to respond. Please try again.');
+        } else if (errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
+          throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+        }
+        
+        // Return the original error message if it's already user-friendly
+        throw new Error(error.message);
       }
       
-      throw new Error('Failed to get AI response. Please try again.')
+      throw new Error('An unexpected error occurred. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -303,7 +337,9 @@ export default function JusAI() {
                 <div className="bg-gray-100 text-gray-700 max-w-2xl px-4 py-3 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="text-sm">Analyzing your document...</span>
+                    <span className="text-sm">
+                      {selectedFile ? 'Analyzing your document...' : 'Processing your request...'}
+                    </span>
                   </div>
                 </div>
               </div>

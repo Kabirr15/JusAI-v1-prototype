@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Suppress hydration warnings in development
   reactStrictMode: true,
   
+  // Turbopack configuration for Next.js 16
+  turbopack: {
+    // Empty config to silence the warning
+  },
+  
   webpack: (config) => {
     // Exclude pdf-parse test files from the build
     config.externals = [
